@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ultimate Stopwatch</title>
+  <style>
+    :root {
+      --bg: #121212;
+      --text: #fff;
+      --card: #1e1e1e;
+      --lap-bg: #2a2a2a;
+      --btn: #28a745;
+    }
+
+    body.light {
+      --bg: #f4f4f4;
+      --text: #111;
+      --card: #fff;
+      --lap-bg: #eaeaea;
+      --btn: #007bff;
+    }
+
+    * {
+      box-sizing: border-box;
+      font-family: 'Segoe UI', sans-serif;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      transition: background 0.3s, color 0.3s;
+    }
+
+    .container {
+      background: var(--card);
+      padding: 30px;
+      border-radius: 20px;
+      width: 90%;
+      max-width: 360px;
+      box-shadow: 0 0 15px rgba(0,0,0,0.3);
+      text-align: center;
+    }
+
+    .time {
+      font-size: 40px;
+      margin-bottom: 15px;
+      font-weight: bold;
+    }
+
+    .buttons {
+      flex-wrap: wrap;
+      display: flex;
+      justify-content: center;
+    }
+
+    .buttons button {
+      margin: 5px;
+      padding: 10px 15px;
+      font-size: 15px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: 0.2s;
+      color: #fff;
+    }
+
+    .start { background: #28a745; }
+    .pause { background: #dc3545; }
+    .lap { background: #17a2b8; }
+    .reset { background: #ffc107; color: #000; }
+    .export { background: #6f42c1; }
+    .theme-toggle { background: var(--btn); }
+
+    .laps {
+      margin-top: 20px;
+      max-height: 150px;
+      overflow-y: auto;
+      text-align: left;
+    }
+
+    .lap-item {
+      background: var(--lap-bg);
+      padding: 6px 10px;
+      margin-bottom: 5px;
+      border-radius: 5px;
+    }
+
+    @media (max-width: 400px) {
+      .time { font-size: 32px; }
+      .buttons button {
+        padding: 8px 12px;
+        font-size: 14px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="time" id="display">00:00:00.000</div>
+  <div class="buttons">
+    <button class="start" id="startBtn" onclick="start()">Start</button>
+    <button class="pause" onclick="pause()">Pause</button>
+    <button class="lap" onclick="lap()">Lap</button>
+    <button class="reset" onclick="reset()">Reset</button>
+    <button class="export" onclick="exportLaps()">Export</button>
+    <button class="theme-toggle" onclick="toggleTheme()">🌓 Theme</button>
+  </div>
+  <div class="laps" id="laps"></div>
+</div>
+
+<audio id="click-sound" src="https://www.soundjay.com/buttons/sounds/button-29.mp3" preload="auto"></audio>
+
+<script>
+  let startTime, elapsed = 0, timer = null, laps = [];
+  const display = document.getElementById('display');
+  const lapsContainer = document.getElementById('laps');
+  const clickSound = document.getElementById('click-sound');
+  const startBtn = document.getElementById('startBtn');
+
+  function format(ms) {
+    const date = new Date(ms);
+    const h = date.getUTCHours();
+    const m = date.getUTCMinutes();
+    const s = date.getUTCSeconds();
+    const msPart = ms % 1000;
+    return `${pad(h)}:${pad(m)}:${pad(s)}.${padMs(msPart)}`;
+  }
+
+  function pad(n) { return n < 10 ? '0' + n : n; }
+  function padMs(n) {
+    if (n < 10) return '00' + n;
+    if (n < 100) return '0' + n;
+    return n;
+  }
+
+  function update() {
+    const now = Date.now();
+    const diff = now - startTime + elapsed;
+    display.textContent = format(diff);
+    localStorage.setItem('elapsed', diff);
+  }
+
+  function start() {
+    if (!timer) {
+      clickSound.play();
+      startTime = Date.now();
+      timer = setInterval(update, 10);
+      startBtn.disabled = true;
+    }
+  }
+
+  function pause() {
+    if (timer) {
+      clickSound.play();
+      clearInterval(timer);
+      elapsed += Date.now() - startTime;
+      timer = null;
+      startBtn.disabled = false;
+    }
+  }
+
+  function reset() {
+    clickSound.play();
+    clearInterval(timer);
+    timer = null;
+    elapsed = 0;
+    display.textContent = "00:00:00.000";
+    laps = [];
+    lapsContainer.innerHTML = '';
+    localStorage.removeItem('laps');
+    localStorage.removeItem('elapsed');
+    startBtn.disabled = false;
+  }
+
+  function lap() {
+    if (!timer) return;
+    clickSound.play();
+    const now = Date.now();
+    const time = format(now - startTime + elapsed);
+    laps.unshift(time);
+    updateLaps();
+    saveLaps();
+  }
+
+  function updateLaps() {
+    lapsContainer.innerHTML = '';
+    if (laps.length > 0) {
+      const count = document.createElement('div');
+      count.className = 'lap-item';
+      count.style.fontWeight = 'bold';
+      count.textContent = `Total Laps: ${laps.length}`;
+      lapsContainer.appendChild(count);
+    }
+
+    laps.forEach((lapTime, i) => {
+      const div = document.createElement('div');
+      div.className = 'lap-item';
+      div.textContent = `Lap ${laps.length - i}: ${lapTime}`;
+      lapsContainer.appendChild(div);
+    });
+  }
+
+  function saveLaps() {
+    localStorage.setItem('laps', JSON.stringify(laps));
+  }
+
+  function loadLaps() {
+    const storedLaps = localStorage.getItem('laps');
+    const storedElapsed = localStorage.getItem('elapsed');
+    if (storedLaps) {
+      laps = JSON.parse(storedLaps);
+      updateLaps();
+    }
+    if (storedElapsed) {
+      elapsed = parseInt(storedElapsed);
+      display.textContent = format(elapsed);
+    }
+  }
+
+  function exportLaps() {
+    clickSound.play();
+    if (laps.length === 0) return alert("No laps to export!");
+    const blob = new Blob([laps.join('\n')], { type: 'text/plain' });
+    const link = document.createElement('a');
+    link.download = 'lap-times.txt';
+    link.href = URL.createObjectURL(blob);
+    link.click();
+  }
+
+  function toggleTheme() {
+    document.body.classList.toggle('light');
+    clickSound.play();
+  }
+
+  // Auto-set theme based on user preference
+  window.onload = () => {
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+      document.body.classList.add('light');
+    }
+    loadLaps();
+  };
+</script>
+
+</body>
+</html>
